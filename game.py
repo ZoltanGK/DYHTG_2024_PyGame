@@ -8,19 +8,20 @@ from math import e, pi, sqrt, log
 # Add modifiers:
 #   Select possible values [square roots and famous numbers; integers]
 #   Enable/Disable visual aids?
-#   Get as close as possible? 
+#   Get as close as possible?
+WIDTH = 1280
+HEIGHT = 720
+FPS = 60
+
+SCORE_OUT_OF = 5000
 
 FAMOUS_NUMBERS = {
-    "e" : { "full_name": "Euler's number",
-           "value": e
-    },
-    "π" : { "full_name": "Pi",
-           "value": pi},
-    "φ" : {"full_name": "the golden ratio",
-           "value": (sqrt(5) + 1) / 2},
-    "g" : {"full_name": "the standard acceleration of gravity",
-           "value": 9.80665}
+    "e": {"full_name": "Euler's number", "value": e},
+    "π": {"full_name": "Pi", "value": pi},
+    "φ": {"full_name": "the golden ratio", "value": (sqrt(5) + 1) / 2},
+    "g": {"full_name": "the standard acceleration of gravity", "value": 9.80665},
 }
+
 
 class GameState(Enum):
     INTRO = 0
@@ -30,94 +31,116 @@ class GameState(Enum):
     SETTINGS = 4
     GAME_END = 5
 
+
 NUMBER_OPTIONS = [
     ("Integers", "Integers"),
     ("Square Roots", "Square Roots"),
     ("Cube Roots", "Cube Roots"),
     ("Base-2 Logarithm", "Base-2 Logarithm"),
     ("Famous Constants", "Famous Constants"),
-    ("Random Float", "Random Float")
+    ("Random Float", "Random Float"),
 ]
 
 NUMBER_POOLS = {
-    "Integers" : lambda : rand.randint(1,10),
-    "Square Roots" : lambda : rand.randint(1,100),
-    "Cube Roots" : lambda : rand.randint(1,1000),
-    "Base-2 Logarithm": lambda : rand.randint(2,1024),
-    "Famous Constants": lambda : rand.choice(FAMOUS_NUMBERS),
-    "Random Float": lambda : rand.uniform(1,10)
+    "Integers": lambda: rand.randint(1, 10),
+    "Square Roots": lambda: rand.randint(1, 100),
+    "Cube Roots": lambda: rand.randint(1, 1000),
+    "Base-2 Logarithm": lambda: rand.randint(2, 1024),
+    "Famous Constants": lambda: list(FAMOUS_NUMBERS.keys()),
+    "Random Float": lambda: rand.uniform(1, 10),
 }
 
-pygame.init()
-
-WIDTH = 1280
-HEIGHT = 720
-FPS = 60
-GAME_FONT = pygame.font.Font(None, 32)
 
 def vec_sub(a, b):
     return (a[0] - b[0], a[1] - b[1])
 
 
 def main():
-    num_to_show = 3
+    pygame.init()
+    game_font = pygame.font.Font(None, 32)
+    num_to_show = 4
     num_shown = 0
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     timer = pygame.time.Clock()
     running = True
     curr_state = GameState.INTRO
     prev_state = GameState.INTRO
-    frame_counter =  1
+    frame_counter = 1
     number_chosen = None
     indiv_score = 0
     total_score = 0
     doing_action = False
+    restart = False
     number_option_choice = "Integers"
 
     settings = {
         "Show Exact Time in Seconds": False,
-        "Show Exact Time in Frames": False
-    } 
+        "Show Exact Time in Frames": False,
+        "Visual Aid Circle": False,
+    }
 
-    def start_game():
-        nonlocal curr_state
-        curr_state = GameState.NUMBER_SHOW
+    def update_state(new_state):
+        nonlocal prev_state, curr_state, doing_action
+        prev_state = curr_state
+        curr_state = new_state
+        doing_action = False
 
     def change_setting(option, val):
-            settings[option] = val
-            pygame.event.post(pm.events.CLOSE)
-    
+        nonlocal settings
+        settings[option] = val
+
+    def update_num_to_show(val):
+        nonlocal num_to_show
+        num_to_show = round(val)
+
     def select_number_option(choice):
         nonlocal number_option_choice
         number_option_choice = choice
 
     def settings_loop(screen):
-        settings_menu = pm.Menu(title="Customisation",
-                                width=WIDTH,
-                                height=HEIGHT,
-                                theme = pm.themes.THEME_BLACK)
-        
-        for option in settings:
-            settings_menu.add.toggle_switch(title = option,
-                                            default=settings[option],
-                                            onchange=lambda val, opt=option: change_setting(opt, val))
-            
-        settings_menu.add.dropselect("Number Pool",
-                                    items=NUMBER_OPTIONS, 
-                                    default=0,
-                                    onchange=lambda selection_tuple, 
-                                    value: select_number_option(selection_tuple[0]))
 
-        settings_menu.add.range_slider("Amount of Numbers to Estimate",
-                                    range_values=(1,3),
-                                    increment=1,
-                                    value_format=lambda x : round(x))
+        settings_menu = pm.Menu(
+            title="Customisation",
+            width=WIDTH,
+            height=HEIGHT,
+            theme=pm.themes.THEME_DARK,
+        )
+
+        def start_game():
+            update_state(GameState.NUMBER_SHOW)
+            settings_menu.disable()
+
+        for option in settings:
+            settings_menu.add.toggle_switch(
+                title=option,
+                default=settings[option],
+                onchange=lambda val, opt=option: change_setting(opt, val),
+            )
+
+        settings_menu.add.dropselect(
+            "Number Pool",
+            items=NUMBER_OPTIONS,
+            default=0,
+            onchange=lambda selection_tuple, value: select_number_option(
+                selection_tuple[0][0]
+            ),
+        )
+
+        settings_menu.add.range_slider(
+            "Amount of Numbers to Estimate",
+            range_values=(1, 4),
+            increment=1,
+            default=num_to_show,
+            value_format=lambda x: str(round(x)),
+            onchange=update_num_to_show,
+        )
 
         settings_menu.add.button("Start", start_game)
         settings_menu.mainloop(screen)
 
     while running:
         text_list = []
+        other_drawables = []
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 doing_action = False
@@ -126,63 +149,120 @@ def main():
                 doing_action = True
             elif event.type == pygame.KEYUP:
                 doing_action = False
-        while doing_action and not (curr_state == GameState.NUMBER_ESTIMATE or curr_state == GameState.SETTINGS):
-            continue
-        if num_to_show <= num_shown and GameState.NUMBER_RESULT:
-            curr_state = GameState.GAME_END
+        if (
+            num_to_show <= num_shown
+            and curr_state == GameState.NUMBER_RESULT
+            and doing_action
+        ):
+            update_state(GameState.GAME_END)
         if curr_state == GameState.INTRO:
-            text_list = ["You will be playing a customisable timing game",
-                            "Your goal will be to hold down the Enter key for as long as a given number",
-                            "Press Enter to start customisation"]
+            text_list = [
+                "You will be playing a timing game",
+                "Your goal will be to hold down the Enter key for as long as a given number",
+                "Press Enter to start customisation",
+            ]
             if doing_action:
-                curr_state = GameState.SETTINGS
+                update_state(GameState.SETTINGS)
         elif curr_state == GameState.SETTINGS:
-                settings_loop(screen)
-                curr_state = GameState.NUMBER_SHOW
+            settings_loop(screen)
         elif curr_state == GameState.NUMBER_SHOW:
-            if prev_state == GameState.NUMBER_RESULT or prev_state == GameState.SETTINGS:
-                number_chosen = NUMBER_POOLS[number_option_choice]
+            if (
+                prev_state == GameState.NUMBER_RESULT
+                or prev_state == GameState.SETTINGS
+            ):
+                print(num_shown)
+                print(num_to_show)
+                number_chosen = NUMBER_POOLS[number_option_choice]()
                 if number_option_choice == "Famous Constants":
+                    number_chosen = number_chosen[num_shown]
                     number_val = FAMOUS_NUMBERS[number_chosen]["value"]
                     number_text = f"{number_chosen} ({FAMOUS_NUMBERS[number_chosen]['full_name']})"
                 elif number_option_choice == "Square Roots":
                     number_val = sqrt(number_chosen)
                     number_text = f"the square root of {number_chosen}"
                 elif number_option_choice == "Cube Roots":
-                    number_val = number_chosen**(1/3)
+                    number_val = number_chosen ** (1 / 3)
                     number_text = f"the cube root of {number_chosen}"
                 elif number_option_choice == "Base-2 Logarithm":
                     number_val = log(number_chosen, 2)
                     number_text = f"log2 of {number_chosen}"
                 else:
-                    number_val = round(number_chosen,3)
+                    number_val = round(number_chosen, 3)
                     number_text = f"{number_val}"
                 number_val = round(number_val, 3)
-                target = int(number_val*60)
-                num_shown += 1      
-            text_list = [f"You need to hold the Enter key for {number_text} {'seconds' if not settings['Show Time in Frames'] else 'frames'}"]
+                target = int(number_val * 60)
+                num_shown += 1
+                update_state(curr_state)
+            text_list.append(
+                f"You need to hold the Enter key for {number_text} seconds"
+            )
             if settings["Show Exact Time in Seconds"]:
                 text_list.append(f"(Exactly: {number_val} seconds)")
             if settings["Show Exact Time in Frames"]:
                 text_list.append(f"({target} frames)")
-            text_list.append("The timer will start as soon as you start pressing the Enter key")
+            text_list.append(
+                "The timer will start as soon as you start pressing the Enter key"
+            )
+            if settings["Visual Aid Circle"]:
+                text_list.append(
+                    "You will see a circle fade in and out over a total period of 2 seconds"
+                )
+            if doing_action:
+                curr_state = GameState.NUMBER_ESTIMATE
         elif curr_state == GameState.NUMBER_ESTIMATE:
             text_list.append("Let go if you think the right time has passed")
+            text_list.append(f"Target: {number_text}")
+            if settings["Visual Aid Circle"]:
+                t_in_half_period = frame_counter % FPS
+                # below might be off by one, idk
+                # if in second half of the 2 second period
+                if (frame_counter % (FPS * 2)) > FPS:
+                    t_in_half_period = 60 - t_in_half_period
+                # now convert this to a value out of 255
+                # round() and int() should lead to similar results, I think
+                # it's not meant to be a perfect aid anyway
+                alpha = round((t_in_half_period / 60) * 255)
+                print(alpha)
+                other_drawables.append(
+                    (
+                        pygame.draw.circle,
+                        [
+                            screen,
+                            (alpha, alpha, alpha),
+                            vec_sub(screen.get_rect().center, (0, -1 * WIDTH / 8)),
+                            WIDTH / 16,
+                        ],
+                    )
+                )
             if doing_action:
                 frame_counter += 1
             else:
-                indiv_score = round(abs(1 - frame_counter / target) * 100, 1) * 10
+                print(frame_counter, target)
+                indiv_score = -1 * abs((target - frame_counter) / target) + 1
+                indiv_score = round(indiv_score * SCORE_OUT_OF)
                 total_score += indiv_score
-                frame_counter = 1
-                curr_state = GameState.NUMBER_RESULT
+                update_state(GameState.NUMBER_RESULT)
         elif curr_state == GameState.NUMBER_RESULT:
-            text_list.append(f"You scored {indiv_score} out of a possible 1000")
+            text_list.append(
+                f"You scored {indiv_score} out of a possible {SCORE_OUT_OF}"
+            )
+            text_list.append(
+                f"You held the button for {frame_counter / 60:.3f} seconds"
+            )
+            text_list.append(f"Your target was {target / 60:.3f} seconds")
             text_list.append("Press Enter to continue")
             if doing_action:
-                curr_state = GameState.NUMBER_SHOW
+                update_state(GameState.NUMBER_SHOW)
+                frame_counter = 1
                 indiv_score = 0
         elif curr_state == GameState.GAME_END:
-            text_list.append(f"You achieved a total score of {total_score} from a maximum of {num_to_show * 1000}")
+            text_list.append(
+                f"You achieved a total score of {total_score} from a maximum of {num_to_show * SCORE_OUT_OF}"
+            )
+            text_list.append("Press Enter to restart")
+            if doing_action:
+                running = False
+                restart = True
         else:
             # Ruh roh, Raggy
             text_list.append("ERROR: Unknown Game State")
@@ -191,17 +271,22 @@ def main():
 
         screen.fill("black")
         for i in range(len(text_list)):
-            offset = round(i - len(text_list)/2) * 48
+            offset = (i - len(text_list) / 2 - (len(text_list) % 2)) * 48
             text = text_list[i]
-            text_surf = GAME_FONT.render(text, True, "white")
-            text_rect = text_surf.get_rect(center = vec_sub(screen.get_rect().center,(0, offset)))
+            text_surf = game_font.render(text, True, "white")
+            text_rect = text_surf.get_rect(
+                center=vec_sub(screen.get_rect().center, (0, -offset))
+            )
             screen.blit(text_surf, text_rect)
+        for i in other_drawables:
+            i[0](*i[1])
 
         pygame.display.flip()
-
         timer.tick(FPS)
+    pygame.quit()
+    if restart:
+        main()
+
 
 if __name__ == "__main__":
     main()
-
-pygame.quit()
