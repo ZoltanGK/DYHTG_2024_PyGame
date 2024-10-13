@@ -2,6 +2,8 @@ import pygame
 import pygame_menu as pm
 import random as rand
 import winsound
+import os
+import sys
 from enum import Enum
 from numpy import zeros, int8, sin
 from math import e, pi, sqrt, log
@@ -47,7 +49,7 @@ NUMBER_POOLS = {
     "Integers": lambda: rand.randint(1, 10),
     "Square Roots": lambda: rand.randint(1, 100),
     "Cube Roots": lambda: rand.randint(1, 1000),
-    "Base-2 Logarithm": lambda: rand.randint(2, 1024),
+    "Base-2 Logarithm": lambda: rand.randint(1, 9),
     "Famous Constants": lambda: list(FAMOUS_NUMBERS.keys()),
     "Random Float": lambda: rand.uniform(1, 10),
 }
@@ -146,7 +148,9 @@ def main():
         text_list = []
         other_drawables = []
         for event in pygame.event.get():
-            if event.type == pygame.QUIT:
+            if event.type == pygame.QUIT or (
+                event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE
+            ):
                 doing_action = False
                 running = False
             elif event.type == pygame.KEYDOWN:
@@ -162,8 +166,9 @@ def main():
         if curr_state == GameState.INTRO:
             text_list = [
                 "You will be playing a timing game",
-                "Your goal will be to hold down the Enter key for as long as a given number",
-                "Press Enter to start customisation",
+                "Your goal will be to hold down any key for as long as a given number",
+                "Press any key to start customisation",
+                "Pressing Escape will exit except in the customisation menu",
             ]
             if doing_action:
                 update_state(GameState.SETTINGS)
@@ -174,8 +179,6 @@ def main():
                 prev_state == GameState.NUMBER_RESULT
                 or prev_state == GameState.SETTINGS
             ):
-                print(num_shown)
-                print(num_to_show)
                 number_chosen = NUMBER_POOLS[number_option_choice]()
                 if number_option_choice == "Famous Constants":
                     number_chosen = number_chosen[num_shown]
@@ -188,6 +191,10 @@ def main():
                     number_val = number_chosen ** (1 / 3)
                     number_text = f"the cube root of {number_chosen}"
                 elif number_option_choice == "Base-2 Logarithm":
+                    # Some silly maths to make it so it's not a 50% chance of getting a target time between 9 and 10
+                    number_chosen = rand.randint(
+                        2**number_chosen, 2 ** (number_chosen + 1)
+                    )
                     number_val = log(number_chosen, 2)
                     number_text = f"log2 of {number_chosen}"
                 else:
@@ -197,15 +204,13 @@ def main():
                 target = int(number_val * 60)
                 num_shown += 1
                 update_state(curr_state)
-            text_list.append(
-                f"You need to hold the Enter key for {number_text} seconds"
-            )
+            text_list.append(f"You need to hold any key for {number_text} seconds")
             if settings["Show Exact Time in Seconds"]:
                 text_list.append(f"(Exactly: {number_val} seconds)")
             if settings["Show Exact Time in Frames"]:
                 text_list.append(f"({target} frames)")
             text_list.append(
-                "The timer will start as soon as you start pressing the Enter key"
+                "The timer will start as soon as you start pressing any key"
             )
             if settings["Visual Aid Circle"]:
                 text_list.append(
@@ -282,7 +287,7 @@ def main():
                 f"You held the button for {frame_counter / 60:.3f} seconds"
             )
             text_list.append(f"Your target was {target / 60:.3f} seconds")
-            text_list.append("Press Enter to continue")
+            text_list.append("Press any key to continue")
             if doing_action:
                 update_state(GameState.NUMBER_SHOW)
                 frame_counter = 1
@@ -291,7 +296,7 @@ def main():
             text_list.append(
                 f"You achieved a total score of {total_score} from a maximum of {num_to_show * SCORE_OUT_OF}"
             )
-            text_list.append("Press Enter to restart")
+            text_list.append("Press any key to restart")
             if doing_action:
                 running = False
                 restart = True
@@ -317,7 +322,9 @@ def main():
         timer.tick(FPS)
     pygame.quit()
     if restart:
-        main()
+        # Awful way to do this, but hey, it works!
+        os.startfile(__file__)
+        sys.exit()
 
 
 if __name__ == "__main__":
