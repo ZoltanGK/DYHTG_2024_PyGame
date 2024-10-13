@@ -206,7 +206,9 @@ def main():
                 update_state(curr_state)
             text_list.append(f"You need to hold any key for {number_text} seconds")
             if settings["Show Exact Time in Seconds"]:
-                text_list.append(f"(Exactly: {number_val} seconds)")
+                text_list.append(
+                    f"(Exactly: {number_val} seconds [rounded to {target/60:.3f}])"
+                )
             if settings["Show Exact Time in Frames"]:
                 text_list.append(f"({target} frames)")
             text_list.append(
