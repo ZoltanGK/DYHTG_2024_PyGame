@@ -219,7 +219,7 @@ def main():
                     "You will see a circle fade in and out over a total period of 2 seconds"
                 )
             if settings["Play Audio Aid"]:
-                text_list.append("You will hear ")
+                text_list.append("You will hear a tone that moves up and down an octave over a period of 2 seconds")
             if doing_action:
                 curr_state = GameState.NUMBER_ESTIMATE
         elif curr_state == GameState.NUMBER_ESTIMATE:
