@@ -1,7 +1,9 @@
 import pygame
 import pygame_menu as pm
 import random as rand
+import winsound
 from enum import Enum
+from numpy import zeros, int8, sin
 from math import e, pi, sqrt, log
 
 # Idea: Game where you hold a button down for a given amount of time
@@ -57,6 +59,7 @@ def vec_sub(a, b):
 
 def main():
     pygame.init()
+    pygame.mixer.pre_init(channels=2, size=-8)
     game_font = pygame.font.Font(None, 32)
     num_to_show = 4
     num_shown = 0
@@ -77,6 +80,7 @@ def main():
         "Show Exact Time in Seconds": False,
         "Show Exact Time in Frames": False,
         "Visual Aid Circle": False,
+        "Play Audio Aid": False,
     }
 
     def update_state(new_state):
@@ -207,22 +211,24 @@ def main():
                 text_list.append(
                     "You will see a circle fade in and out over a total period of 2 seconds"
                 )
+            if settings["Play Audio Aid"]:
+                text_list.append("You will hear ")
             if doing_action:
                 curr_state = GameState.NUMBER_ESTIMATE
         elif curr_state == GameState.NUMBER_ESTIMATE:
             text_list.append("Let go if you think the right time has passed")
             text_list.append(f"Target: {number_text}")
-            if settings["Visual Aid Circle"]:
+            if settings["Play Audio Aid"] or settings["Visual Aid Circle"]:
                 t_in_half_period = frame_counter % FPS
                 # below might be off by one, idk
                 # if in second half of the 2 second period
                 if (frame_counter % (FPS * 2)) > FPS:
-                    t_in_half_period = 60 - t_in_half_period
+                    t_in_half_period = FPS - t_in_half_period
+            if settings["Visual Aid Circle"]:
                 # now convert this to a value out of 255
                 # round() and int() should lead to similar results, I think
                 # it's not meant to be a perfect aid anyway
-                alpha = round((t_in_half_period / 60) * 255)
-                print(alpha)
+                alpha = round((t_in_half_period / FPS) * 255)
                 other_drawables.append(
                     (
                         pygame.draw.circle,
@@ -234,6 +240,32 @@ def main():
                         ],
                     )
                 )
+            if settings["Play Audio Aid"] and (
+                frame_counter == 1 or (frame_counter % FPS) % 8 == 0
+            ):
+                # Left as backup
+                # # Frequency doubling is fine
+                # base_frequency = 440
+                # frequency = int(base_frequency * 2 ** (t_in_half_period / FPS))
+                # # So winsound actually blocks execution until the sound plays I believe
+                # # which is lovely and very helpful
+                # winsound.Beep(frequency, int(1000 / FPS / 2))
+
+                # thanks to https://stackoverflow.com/questions/7816294/simple-pygame-audio-at-a-frequency
+                # for help with figuring out this sndarray stuff
+                n_samples = int(round(pygame.mixer.get_init()[0] / FPS * 8))
+                bits = zeros((n_samples, 2), dtype=int8)
+                max_sample = 2**7 - 1
+                max_sample /= 2
+                base_frequency = 440
+                frequency = int(base_frequency * 2 ** (t_in_half_period / FPS))
+                for s in range(n_samples):
+                    t = s / pygame.mixer.get_init()[0]
+
+                    bits[s][0] = int(round(max_sample * sin(2 * pi * frequency * t)))
+                    bits[s][1] = int(round(max_sample * sin(2 * pi * frequency * t)))
+                beep = pygame.sndarray.make_sound(bits)
+                beep.play()
             if doing_action:
                 frame_counter += 1
             else:
